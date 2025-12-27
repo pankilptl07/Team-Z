@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date
 import re
 
-st.set_page_config(page_title="GearGuard Pro", layout="wide")
+st.set_page_config(page_title="GearGuard: The Ultimate Maintenance Tracker", layout="wide")
 
 st.markdown("""
 <style>
@@ -40,7 +40,8 @@ if 'init' not in st.session_state:
     st.session_state['teams'] = [
         {"name": "Internal Maintenance", "members": "Kush Acharya", "company": "My Company"},
         {"name": "Metrology", "members": "Puja Naina", "company": "My Company"},
-        {"name": "Subcontractor", "members": "Isagi Youichi", "company": "My Company"}
+        {"name": "Subcontractor", "members": "Jinansh Jain", "company": "My Company"},
+        {"name": "Predictive Maintenance", "members": "Pankil Patel", "company": "My Company"}
     ]
     st.session_state['categories'] = ["Computers", "Monitors", "Machinery", "Vehicles"]
     st.session_state['work_centers'] = [
@@ -50,15 +51,15 @@ if 'init' not in st.session_state:
     st.session_state['equipment'] = [
         {
             "id": 1, "name": "Samsung Monitor 15\"", "category": "Monitors",
-            "serial": "MT/125/22778837", "owner": "Pankil Patel", 
+            "serial": "PP/122/111112221", "owner": "Pankil Patel", 
             "team": "Internal Maintenance", "status": "Active", "health": 90,
             "work_center": "Assembly 1", "technician": "Adamas"
         },
         {
             "id": 2, "name": "Acer Laptop", "category": "Computers",
-            "serial": "MT/122/11112222", "owner": "Jinansh Jain", 
+            "serial": "JJ/122/11112222", "owner": "Jinansh Jain", 
             "team": "Internal Maintenance", "status": "Active", "health": 20,
-            "work_center": None, "technician": "Beelzebub"
+            "work_center": "None", "technician": "Beelzebub"
         }
     ]
     st.session_state['requests'] = []
@@ -179,3 +180,108 @@ else:
             st.dataframe(df[['subject', 'technician', 'maintenance_for', 'stage', 'priority']], use_container_width=True)
         else:
             st.info("No recent activity.")
+            
+    elif menu == "Maintenance Requests":
+        st.title("Maintenance Requests")
+        
+        tab1, tab2 = st.tabs(["New Request", "View"])
+        
+        with tab1:
+            with st.form("req_form"):
+                col1, col2 = st.columns(2)
+                
+                maint_for = col1.radio("Maintenance For", ["Equipment", "Work Center"], horizontal=True)
+                
+                subject = col1.text_input("Subject (e.g., Test activity)")
+                
+                target_obj = None
+                if maint_for == "Equipment":
+                    target_obj = col1.selectbox("Equipment", [e['name'] for e in st.session_state['equipment']])
+                else:
+                    target_obj = col1.selectbox("Work Center", [w['name'] for w in st.session_state['work_centers']])
+                
+                cat = col1.selectbox("Category", st.session_state['categories'])
+                req_date = col1.date_input("Request Date")
+                
+                team = col2.selectbox("Team", [t['name'] for t in st.session_state['teams']])
+                tech = col2.text_input("Technician", "Sunaynah Talpade")
+                sched_date = col2.date_input("Scheduled Date?")
+                priority = col2.selectbox("Priority", ["★", "★★", "★★★"])
+                
+                submit = st.form_submit_button("Create Request")
+                
+                if submit:
+                    new_req = {
+                        "id": len(st.session_state['requests']) + 1,
+                        "subject": subject,
+                        "maintenance_for": target_obj,
+                        "type": maint_for,
+                        "technician": tech,
+                        "team": team,
+                        "date": str(sched_date),
+                        "priority": priority,
+                        "stage": "New"
+                    }
+                    st.session_state['requests'].append(new_req)
+                    st.success("Request Created")
+
+        with tab2:
+            stages = ["New", "In Progress", "Repaired", "Scrap"]
+            cols = st.columns(4)
+            for i, stage in enumerate(stages):
+                with cols[i]:
+                    st.subheader(stage)
+                    for r in [x for x in st.session_state['requests'] if x['stage'] == stage]:
+                        with st.container(border=True):
+                            st.write(f"*{r['subject']}*")
+                            st.caption(f"{r['type']}: {r['maintenance_for']}")
+                            
+                            if stage != "Scrap" and stage != "Repaired":
+                                if st.button("Next Stage", key=f"next_{r['id']}"):
+                                    next_idx = stages.index(stage) + 1
+                                    r['stage'] = stages[next_idx]
+                                    st.rerun()
+    elif menu == "Equipment":
+        st.title("Equipment")
+        
+        tab_list, tab_form = st.tabs(["List View", "Add New"])
+        
+        with tab_list:
+            df_eq = pd.DataFrame(st.session_state['equipment'])
+            st.dataframe(df_eq[['name', 'owner', 'serial', 'technician', 'category', 'status']], use_container_width=True)
+            
+        with tab_form:
+            st.button("🔧 Maintenance (0)", disabled=True) 
+            
+            with st.form("new_equip"):
+                c1, c2 = st.columns(2)
+                name = c1.text_input("Name")
+                cat = c1.selectbox("Equipment Category", st.session_state['categories'])
+                owner = c1.text_input("Used By (Employee)")
+                team = c1.selectbox("Maintenance Team", [t['name'] for t in st.session_state['teams']])
+                
+                tech = c2.text_input("Technician")
+                serial = c2.text_input("Serial Number")
+                wc = c2.selectbox("Work Center", ["None"] + [w['name'] for w in st.session_state['work_centers']])
+                
+                if st.form_submit_button("Save Equipment"):
+                    st.session_state['equipment'].append({
+                        "id": 99, "name": name, "category": cat, "serial": serial,
+                        "owner": owner, "team": team, "status": "Active", "health": 100,
+                        "work_center": wc if wc != "None" else None, "technician": tech
+                    })
+                    st.success("Saved")
+
+    elif menu == "Work Centers":
+        st.title("Work Centers")
+        
+        with st.expander("Create Work Center"):
+            with st.form("wc_form"):
+                w_name = st.text_input("Work Center Name")
+                w_code = st.text_input("Code")
+                w_eff = st.number_input("Time Efficiency", 100)
+                if st.form_submit_button("Add"):
+                    st.session_state['work_centers'].append({"name": w_name, "code": w_code, "efficiency": w_eff})
+                    st.rerun()
+        
+        st.dataframe(pd.DataFrame(st.session_state['work_centers']), use_container_width=True)
