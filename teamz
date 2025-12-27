@@ -1,0 +1,181 @@
+import streamlit as st
+import pandas as pd
+from datetime import date
+import re
+
+st.set_page_config(page_title="GearGuard Pro", layout="wide")
+
+st.markdown("""
+<style>
+    .metric-card-red {
+        background-color: #ffcccc;
+        border: 1px solid #ff4b4b;
+        padding: 20px;
+        border-radius: 10px;
+        color: #8a0000;
+    }
+    .metric-card-blue {
+        background-color: #cce5ff;
+        border: 1px solid #0068c9;
+        padding: 20px;
+        border-radius: 10px;
+        color: #004085;
+    }
+    .metric-card-green {
+        background-color: #d4edda;
+        border: 1px solid #28a745;
+        padding: 20px;
+        border-radius: 10px;
+        color: #155724;
+    }
+    .stButton>button {
+        width: 100%;
+    }
+</style>
+""", unsafe_allow_html=True)
+if 'init' not in st.session_state:
+    st.session_state['users'] = [
+        {"name": "Admin", "email": "admin@test.com", "password": "Admin@123"}
+    ]
+    st.session_state['teams'] = [
+        {"name": "Internal Maintenance", "members": "Kush Acharya", "company": "My Company"},
+        {"name": "Metrology", "members": "Puja Naina", "company": "My Company"},
+        {"name": "Subcontractor", "members": "Isagi Youichi", "company": "My Company"}
+    ]
+    st.session_state['categories'] = ["Computers", "Monitors", "Machinery", "Vehicles"]
+    st.session_state['work_centers'] = [
+        {"name": "Assembly 1", "code": "WC001", "efficiency": 100},
+        {"name": "Drill 1", "code": "WC002", "efficiency": 95}
+    ]
+    st.session_state['equipment'] = [
+        {
+            "id": 1, "name": "Samsung Monitor 15\"", "category": "Monitors",
+            "serial": "MT/125/22778837", "owner": "Pankil Patel", 
+            "team": "Internal Maintenance", "status": "Active", "health": 90,
+            "work_center": "Assembly 1", "technician": "Adamas"
+        },
+        {
+            "id": 2, "name": "Acer Laptop", "category": "Computers",
+            "serial": "MT/122/11112222", "owner": "Jinansh Jain", 
+            "team": "Internal Maintenance", "status": "Active", "health": 20,
+            "work_center": None, "technician": "Beelzebub"
+        }
+    ]
+    st.session_state['requests'] = []
+    
+    st.session_state['logged_in'] = False
+    st.session_state['current_user'] = None
+    st.session_state['auth_mode'] = 'Login'
+    st.session_state['init'] = True
+
+def validate_password(password):
+    if len(password) < 8: return False
+    if not re.search(r"[a-z]", password): return False
+    if not re.search(r"[A-Z]", password): return False
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password): return False
+    return True
+
+if not st.session_state['logged_in']:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.session_state['auth_mode'] == 'Login':
+            st.header("Login Page")
+            with st.form("login_form"):
+                email = st.text_input("Email ID")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Sign In")
+                
+                if submit:
+                    user = next((u for u in st.session_state['users'] if u['email'] == email and u['password'] == password), None)
+                    if user:
+                        st.session_state['logged_in'] = True
+                        st.session_state['current_user'] = user
+                        st.rerun()
+                    else:
+                        st.error("Invalid Email or Password")
+            
+            if st.button("New user? Sign Up"):
+                st.session_state['auth_mode'] = 'Signup'
+                st.rerun()
+
+        else:
+            st.header("Sign Up Page")
+            with st.form("signup_form"):
+                name = st.text_input("Name")
+                email = st.text_input("Email ID")
+                p1 = st.text_input("Password", type="password", help="8+ chars, 1 uppercase, 1 special char")
+                p2 = st.text_input("Re-Enter Password", type="password")
+                submit = st.form_submit_button("Sign Up")
+                
+                if submit:
+                    if p1 != p2:
+                        st.error("Passwords do not match")
+                    elif not validate_password(p1):
+                        st.error("Password must correspond to requirements (8 chars, Upper, Lower, Special)")
+                    elif any(u['email'] == email for u in st.session_state['users']):
+                        st.error("Email already exists")
+                    else:
+                        st.session_state['users'].append({"name": name, "email": email, "password": p1})
+                        st.success("Account Created! Please Sign In.")
+                        st.session_state['auth_mode'] = 'Login'
+                        st.rerun()
+            
+            if st.button("Back to Login"):
+                st.session_state['auth_mode'] = 'Login'
+                st.rerun()
+
+else:
+    st.sidebar.title(f"👤 {st.session_state['current_user']['name']}")
+    menu = st.sidebar.radio("Menu", [
+        "Dashboard", 
+        "Maintenance Requests", 
+        "Equipment", 
+        "Work Centers", 
+        "Teams", 
+        "Calendar"
+    ])
+    
+    if st.sidebar.button("Logout"):
+        st.session_state['logged_in'] = False
+        st.rerun()
+
+    if menu == "Dashboard":
+        st.title("Dashboard")
+        
+        critical_count = len([e for e in st.session_state['equipment'] if e['health'] < 30])
+        open_reqs = len([r for r in st.session_state['requests'] if r['stage'] in ["New", "In Progress"]])
+        overdue_reqs = len([r for r in st.session_state['requests'] if r['date'] < str(date.today()) and r['stage'] != "Repaired"])
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"""
+            <div class="metric-card-red">
+                <h3>Critical Equipment</h3>
+                <h1>{critical_count} Units</h1>
+                <p>(Health < 30%)</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""
+            <div class="metric-card-blue">
+                <h3>Technician Load</h3>
+                <h1>85% Utilized</h1>
+                <p>(Assign Carefully)</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with c3:
+            st.markdown(f"""
+            <div class="metric-card-green">
+                <h3>Open Requests</h3>
+                <h1>{open_reqs} Pending</h1>
+                <p>{overdue_reqs} Overdue</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader("Recent Activity")
+        if st.session_state['requests']:
+            df = pd.DataFrame(st.session_state['requests'])
+            st.dataframe(df[['subject', 'technician', 'maintenance_for', 'stage', 'priority']], use_container_width=True)
+        else:
+            st.info("No recent activity.")
